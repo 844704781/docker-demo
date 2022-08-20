@@ -2,6 +2,8 @@
 
 ## Docker简介
 
+通俗理解,docker就是装应用的容器,比如说装水的是杯子,装米饭的是碗
+
 可以粗糙的理解为轻量的虚拟机
 
 开挂的chroot,choot对应用c程序做了文件系统的分离
@@ -38,6 +40,28 @@
 
 
 
+### 镜像
+
+Docker的文件系统称之为镜像
+
+![20](.\images\20.png)
+
+### 容器
+
+容器就是一个进程,你可以暂时理解成虚拟机
+
+
+
+### 仓库
+
+主要存储用户自定义的镜像,这些镜像运行起来,就是用户需要的容器
+
+
+
+
+
+
+
 ![2](./images/2.png)
 
 `Docker daemon`
@@ -58,7 +82,25 @@
 
 ​	客户端与守护进程进行交互，守护进程负责运行容器，从镜像仓库获取镜像。
 
+### Docker pull 下载镜像
 
+`docker pull [OPTIONS] NAME[:TAG]`
+
+去仓库中拉取镜像,NAME代表拉取镜像的名称
+
+### Docker images 查看镜像
+
+`docker images [OPTIONS][REPOSITORY[]]`
+
+### Docker run 运行镜像
+
+`docker run [OPTIONS] IMAGES [:TAG][COMMAND][ARG...]`
+
+docker run时发现镜像不存在,会自动去中央仓库中拉取需要的镜像,也就是会自动执行docker pull
+
+#### -d后台运行
+
+加上-d参数可以让容器后台运行
 
 ### 运行一个简单的ubuntu容器
 
@@ -106,6 +148,62 @@ $ docker rm ade5a1dbd28b ade5a1dbd281
 ![4](./images/4.png)
 
 ![5](.\images\5.png)
+
+
+
+### 运行nginx镜像
+
+#### 拉取镜像
+
+```shell
+docker pull nginx
+```
+
+
+
+#### 运行容器
+
+```shell
+docker run -d nginx
+```
+
+
+
+#### 进入容器内部
+
+docker exec -it 容器名称 bash
+
+```shell
+ docker ps
+ docker exec -it b8e9414f03ed bash
+```
+
+
+
+#### 访问容器中的nginx
+
+##### docker网络模式
+
+![21](.\images\21.png)
+
+##### 指定宿主端口映射容器端口
+
+docker run -d -p 宿主端口:容器端口 镜像名称
+
+```shell
+docker run -d -p 8000:80 nginx
+```
+
+##### 宿主随机端口映射容器端口
+
+docker run -d -P 镜像名称
+
+```shell
+docker run -d -P nginx
+# 可通过docker ps查看容器端口映射情况
+```
+
+
 
 
 
@@ -179,6 +277,16 @@ $ docker run -d -p 8000:80 watermelon/nginx01
 
 
 
+### docker build根据dockerfile构建镜像
+
+docker build -t 自定义镜像名称 .(镜像地址)
+
+
+
+### docker run 运行创建好的镜像
+
+
+
 ### docker分层
 
 ![8](.\images\8.png)
@@ -186,6 +294,48 @@ $ docker run -d -p 8000:80 watermelon/nginx01
 ![9](.\images\9.png)
 
 
+
+### 使用dump-init解决docker在运行多线程应用时无法回收僵尸进程的bug
+
+```dockerfile
+ARG MAVENREPO
+FROM $MAVENREPO as mavenrepo
+ARG PROFILE
+WORKDIR /build
+COPY pom.xml .
+RUN mvn dependency:go-offline
+COPY src/ /build/src/
+RUN mvn clean package -P$PROFILE -DskipTests
+FROM adoptopenjdk/openjdk15:x86_64-centos-jre15u-nightly
+WORKDIR /app
+COPY --from=mavenrepo /build/target/rec-goods-crawler.jar /app
+
+ARG PROFILE
+ENV SPRING_PROFILES_ACTIVE=$PROFILE
+
+RUN yum install -y epel-release
+RUN yum install -y htop
+RUN yum install -y nload
+RUN yum install -y tmux
+RUN yum install -y openssh-clients
+RUN yum install -y libXScrnSaver
+RUN yum install -y at-spi2-atk
+RUN yum install -y gtk3
+RUN yum install -y alsa-lib-devel
+RUN yum install -y unzip
+RUN yum install -y wget
+RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_x86_64
+RUN chmod +x /usr/local/bin/dumb-init
+
+
+
+RUN mkdir -p /app/.local-browser/
+RUN cd /app/.local-browser/ \
+    && wget https://npm.taobao.org/mirrors/chromium-browser-snapshots/Linux_x64/722234/chrome-linux.zip \
+    && unzip -o -d /app/.local-browser/linux-722234 chrome-linux.zip
+
+ENTRYPOINT "dumb-init" "java" "--enable-preview" "-XX:+UseZGC" "-XX:MaxGCPauseMillis=200" "-XX:-OmitStackTraceInFastThrow" "-Dsun.net.inetaddr.ttl=60" "-jar" "rec-goods-crawler.jar" "--spring.profiles.active=$SPRING_PROFILES_ACTIVE" "--spring.config.location=classpath:/config/,classpath:/"
+```
 
 
 
